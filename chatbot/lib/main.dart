@@ -1,11 +1,13 @@
 //main.dart
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
+import 'app_localizations.dart';
 import 'model.dart';
 import 'constant.dart';
 import 'settings_page.dart';
@@ -13,25 +15,51 @@ import 'dart:async';
 import 'package:async/async.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+class _AppLocalizationsDelegate
+    extends LocalizationsDelegate<AppLocalizations> {
+  const _AppLocalizationsDelegate();
+
+  @override
+  bool isSupported(Locale locale) {
+    return ['en', 'pl'].contains(locale.languageCode);
+  }
+
+  @override
+  Future<AppLocalizations> load(Locale locale) {
+    return SynchronousFuture<AppLocalizations>(AppLocalizations(locale));
+  }
+
+  @override
+  bool shouldReload(_AppLocalizationsDelegate old) => false;
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeSpeechToText(); // Initialize speech recognition
-  runApp(const MyApp());
+
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  String languageCode = prefs.getString('language') ?? 'en';
+
+  runApp(MyApp(languageCode: languageCode));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final String languageCode;
+
+  const MyApp({Key? key, required this.languageCode}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      locale: Locale(languageCode),
       localizationsDelegates: const [
+        _AppLocalizationsDelegate(),
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
       ],
       supportedLocales: const [
-        Locale('en', 'US'), // English
-        Locale('pl', 'PL'), // Polish
+        Locale('en', ''), // English
+        Locale('pl', ''), // Polish
       ],
       debugShowCheckedModeBanner: false,
       theme: ThemeData(primarySwatch: Colors.grey),
@@ -40,24 +68,6 @@ class MyApp extends StatelessWidget {
         '/settings': (context) => SettingsPage(),
       },
     );
-  }
-}
-
-class AppLocalizations {
-  static const Map<String, Map<String, String>> _localizedValues = {
-    'en': {
-      'change_language': 'Change Language',
-      // Add all your English texts here.
-    },
-    'pl': {
-      'change_language': 'Zmień język',
-      // Add all your Polish texts here.
-    },
-  };
-
-  static String? of(BuildContext context, String key) {
-    Locale locale = Localizations.localeOf(context);
-    return _localizedValues[locale.languageCode]?[key];
   }
 }
 
@@ -218,7 +228,7 @@ class _ChatPageState extends State<ChatPage> {
     return SafeArea(
       child: Scaffold(
         appBar: AppBar(
-          title: Text('Your App'),
+          title: Text(AppLocalizations.of(context)?.your_app ?? ''),
           actions: <Widget>[
             IconButton(
               icon: Icon(Icons.settings),

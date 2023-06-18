@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_localizations.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -52,16 +53,16 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Settings'),
+        title: Text(AppLocalizations.of(context)?.settings ?? ''),
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Padding(
-            padding: EdgeInsets.all(8.0),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
             child: Text(
-              'Change language',
-              style: TextStyle(fontSize: 20),
+              AppLocalizations.of(context)?.change_language ?? '',
+              style: const TextStyle(fontSize: 20),
             ),
           ),
           DropdownButton<String>(
@@ -81,8 +82,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 _updateCurrentLanguage(newValue);
               });
             },
-            items: <String>['English', 'Polish']
-                .map<DropdownMenuItem<String>>((String value) {
+            items: <String>[
+              AppLocalizations.of(context)?.english ?? '',
+              AppLocalizations.of(context)?.polish ?? ''
+            ].map<DropdownMenuItem<String>>((String value) {
               return DropdownMenuItem<String>(
                 value: value,
                 child: Text(value),
