@@ -1,0 +1,299 @@
+import 'dart:convert';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:http/http.dart' as http;
+import 'package:flutter/material.dart';
+import 'model.dart';
+import 'constant.dart';
+
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(primarySwatch: Colors.grey),
+      home: const ChatPage(),
+    );
+  }
+}
+
+class ChatPage extends StatefulWidget {
+  const ChatPage({super.key});
+
+  @override
+  State<ChatPage> createState() => _ChatPageState();
+}
+
+int currentPage = 0;
+const backgroundColor = Color.fromARGB(97, 247, 247, 247);
+const botBackgroundColor = Color.fromARGB(87, 222, 222, 222);
+late bool isLoading;
+late bool isListening;
+// ignore: prefer_final_fields
+TextEditingController _textController = TextEditingController();
+final _scrollController = ScrollController();
+final List<ChatMessage> _messages = [];
+var input = _textController.text;
+String voiceInput = '';
+
+stt.SpeechToText speech = stt.SpeechToText();
+
+Future<bool> initializeSpeechToText() async {
+  bool available = await speech.initialize();
+  return available;
+}
+
+Future<bool> requestMicrophonePermission() async {
+  PermissionStatus status = await Permission.microphone.request();
+  return status.isGranted;
+}
+
+class _ChatPageState extends State<ChatPage> {
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    isLoading = false;
+    isListening = false;
+  }
+
+  Future<String> generateResponse(String prompt) async {
+    //deklaracja promptu
+    const apiKey = apiSecretKey;
+    var url = Uri.https("api.openai.com", "/v1/chat/completions");
+
+    final messages = [
+      {
+        'role': 'system',
+        'content':
+            'You can start the conversation with a system message if needed.',
+      },
+      {'role': 'user', 'content': prompt},
+    ];
+    final response = await http.post(url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $apiKey'
+        },
+        body: jsonEncode({
+          'model': 'gpt-3.5-turbo',
+          'messages': messages,
+          'temperature': 0,
+          'max_tokens': 2000,
+          'top_p': 1,
+          'frequency_penalty': 0.0,
+          'presence_penalty': 0.0
+        })); //prompt od usera
+    //zdekoduj odpowiedź od gpt
+    debugPrint(response.body);
+    if (response.statusCode == 200) {
+      Map<String, dynamic> responseBody = jsonDecode(response.body);
+      String newresponse = responseBody['choices'][0]['message']['content'];
+      return newresponse;
+    } else {
+      throw Exception('Failed to generate response: ${response.statusCode}');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Scaffold(
+        appBar: AppBar(
+          toolbarHeight: 100,
+          title: const Padding(
+            padding: EdgeInsets.all(8.0),
+            child: Text(
+              "VoiceChatBot",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Color.fromARGB(255, 0, 0, 0)),
+            ),
+          ),
+          backgroundColor: Color.fromARGB(97, 247, 247, 247),
+        ),
+        backgroundColor: Colors.white,
+        body: Column(
+          children: [
+            //chat body
+            Expanded(
+              child: _buildList(),
+            ),
+            Visibility(
+              visible: isLoading,
+              child: const Padding(
+                padding: EdgeInsets.all(8.0),
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Row(
+                children: [
+                  //input
+                  _buildInput(),
+
+                  //submit
+                  _buildSubmit(),
+
+                  //głosowy Submit
+                  //_buildVoiceInput()
+                ],
+              ),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  //Interfejs dla inputu użytkownika TODO: Dodać opcję inputu głosowego
+  Expanded _buildInput() {
+    return Expanded(
+      child: TextField(
+        textCapitalization: TextCapitalization.sentences,
+        style: const TextStyle(color: Colors.black),
+        controller: _textController,
+        decoration: const InputDecoration(
+            fillColor: botBackgroundColor,
+            filled: true,
+            border: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            errorBorder: InputBorder.none,
+            disabledBorder: InputBorder.none),
+      ),
+    );
+  }
+
+
+  //Przycisk wysłania zapytania TODO: Wyłączyć animację naciśnięcia
+  Widget _buildSubmit() {
+    return Visibility(
+      visible: !isLoading,
+      child: Container(
+        color: botBackgroundColor,
+        child: IconButton(
+          icon: Icon(
+            Icons.send_rounded,
+            color: Colors.black87,
+          ),
+          onPressed: () {
+            //wyświetl input użytkownika
+
+            setState(() {
+              _messages.add(ChatMessage(
+                  text: _textController.text,
+                  chatMessageType: ChatMessageType.user));
+              isLoading = true;
+            });
+            var input = _textController
+                .text; //INPUT UŻYTKOWNIKA TODO: Stworzyć logikę tak, by użytkownik mógł tworzyć input głosowy
+            _textController.clear();
+            Future.delayed(const Duration(milliseconds: 50))
+                .then((value) => _scrollDown());
+            //request do api
+
+            generateResponse(input).then((value) {
+              setState(() {
+                isLoading = false;
+                //wyświetl odpowiedź
+                _messages.add(ChatMessage(
+                    text: value, chatMessageType: ChatMessageType.bot));
+              });
+            });
+            _textController.clear();
+            Future.delayed(const Duration(milliseconds: 50))
+                .then((value) => _scrollDown());
+          },
+        ),
+      ),
+    );
+  }
+
+  void _scrollDown() {
+    _scrollController.animateTo(
+      _scrollController.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+  }
+
+  ListView _buildList() {
+    return ListView.builder(
+        itemCount: _messages.length,
+        controller: _scrollController,
+        itemBuilder: ((context, index) {
+          var message = _messages[index];
+
+          return ChatMessageWidget(
+            text: message.text,
+            chatMessageType: message.chatMessageType,
+          );
+        }));
+  }
+}
+
+class ChatMessageWidget extends StatelessWidget {
+  final String text;
+  final ChatMessageType chatMessageType;
+  const ChatMessageWidget(
+      {super.key, required this.text, required this.chatMessageType});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.all(16),
+      color: chatMessageType == ChatMessageType.bot
+          ? botBackgroundColor
+          : backgroundColor,
+      child: Row(
+        children: [
+          chatMessageType == ChatMessageType.bot
+              ? Container(
+                  margin: const EdgeInsets.only(right: 16),
+                  child: CircleAvatar(
+                    backgroundColor: const Color.fromRGBO(16, 163, 127, 1),
+                    child: Image.asset('images/gpticon.jpg'),
+                  ),
+                )
+              : Container(
+                  margin: const EdgeInsets.only(right: 16),
+                  child: const CircleAvatar(
+                    child: Icon(Icons.person),
+                  )),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: const BoxDecoration(
+                    borderRadius: BorderRadius.all(
+                      Radius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    text,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyLarge
+                        ?.copyWith(color: Colors.black),
+                  ),
+                )
+              ],
+            ),
+          )
+        ],
+      ),
+    );
+  }
+}

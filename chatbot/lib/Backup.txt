@@ -1,0 +1,53 @@
+Widget _buildVoiceInput() {
+    void startListening() {
+      speech.listen(
+        onResult: (result) {
+          setState(() {
+            voiceInput = result.recognizedWords;
+          });
+        },
+      );
+    }
+
+    void stopListening() {
+      speech.stop();
+    }
+
+    return Visibility(
+      visible: !isLoading,
+      child: Container(
+        color: botBackgroundColor,
+        child: FloatingActionButton(
+          onPressed: () {
+            startListening();
+            setState(() {
+              _messages.add(ChatMessage(
+                  text: _textController.text,
+                  chatMessageType: ChatMessageType.user));
+              isListening = true;
+            });
+
+            var input = _textController
+                .text; //INPUT UŻYTKOWNIKA TODO: Stworzyć logikę tak, by użytkownik mógł tworzyć input głosowy
+            _textController.clear();
+            Future.delayed(const Duration(milliseconds: 50))
+                .then((value) => _scrollDown());
+            //request do api
+
+            generateResponse(input).then((value) {
+              setState(() {
+                isListening= false;
+                //wyświetl odpowiedź
+                _messages.add(ChatMessage(
+                    text: value, chatMessageType: ChatMessageType.bot));
+              });
+            });
+            _textController.clear();
+            Future.delayed(const Duration(milliseconds: 50))
+                .then((value) => _scrollDown());
+          },
+          child: Icon(Icons.mic),
+        ),
+      ),
+    );
+  }
