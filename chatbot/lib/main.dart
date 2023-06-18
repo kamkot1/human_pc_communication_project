@@ -39,14 +39,24 @@ void main() async {
 
   SharedPreferences prefs = await SharedPreferences.getInstance();
   String languageCode = prefs.getString('language') ?? 'en';
+  bool textToSpeechEnabled = (prefs.getBool('textToSpeechEnabled') ?? true);
+  bool speechToTextEnabled = (prefs.getBool('speechToTextEnabled') ?? true);
 
-  runApp(MyApp(languageCode: languageCode));
+  runApp(MyApp(
+      languageCode: languageCode,
+      textToSpeechEnabled: textToSpeechEnabled,
+      speechToTextEnabled: speechToTextEnabled));
 }
 
 class MyApp extends StatelessWidget {
   final String languageCode;
 
-  const MyApp({Key? key, required this.languageCode}) : super(key: key);
+  const MyApp(
+      {Key? key,
+      required this.languageCode,
+      required bool speechToTextEnabled,
+      required bool textToSpeechEnabled})
+      : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -56,13 +66,14 @@ class MyApp extends StatelessWidget {
         _AppLocalizationsDelegate(),
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: const [
         Locale('en', ''), // English
         Locale('pl', ''), // Polish
       ],
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(primarySwatch: Colors.grey),
+      theme: ThemeData(primarySwatch: Colors.green),
       home: const ChatPage(),
       routes: {
         '/settings': (context) => SettingsPage(),
@@ -159,7 +170,7 @@ class _ChatPageState extends State<ChatPage> {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       String languageCode = prefs.getString('language') ?? 'en-US';
       setState(() {
-        currentLanguage = languageCode == 'en-US' ? 'English' : 'Polish';
+        currentLanguage = languageCode == 'en-US' ? 'English' : 'Polski';
       });
       flutterTts.setLanguage(languageCode);
     }
@@ -201,7 +212,7 @@ class _ChatPageState extends State<ChatPage> {
         body: jsonEncode({
           'model': 'gpt-3.5-turbo',
           'messages': messages,
-          'temperature': 0,
+          'temperature': 0.5,
           'max_tokens': 2000,
           'top_p': 1,
           'frequency_penalty': 0.0,
@@ -277,7 +288,7 @@ class _ChatPageState extends State<ChatPage> {
 
   Timer? timer;
   static const pauseDuration =
-      Duration(seconds: 2); // Change to fit your requirements
+      Duration(seconds: 2); // Change to fit requirements
 
   void sendMessage(voiceInput) {
     if (_textController.text.isNotEmpty) {
@@ -466,51 +477,6 @@ class _ChatPageState extends State<ChatPage> {
         }));
   }
 }
-
-/*class SettingsPage extends StatefulWidget {
-  @override
-  _SettingsPageState createState() => _SettingsPageState();
-}
-
-class _SettingsPageState extends State<SettingsPage> {
-  // Current dropdown value
-  String dropdownValue = 'English';
-  String currentLanguage = 'English'; // Initially set to English
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      child: DropdownButton<String>(
-        value: currentLanguage,
-        icon: const Icon(Icons.arrow_downward),
-        iconSize: 24,
-        elevation: 16,
-        underline: Container(
-          height: 2,
-          color: Colors.deepPurpleAccent,
-        ),
-        onChanged: (String? newValue) {
-          setState(() {
-            currentLanguage = newValue!;
-            //_changeSpeechLocale(currentLanguage);
-            String languageCode = newValue == 'English' ? 'en-US' : 'pl-PL';
-            var setLanguage = flutterTts.setLanguage(languageCode);
-            // Save the language preference so that it can be loaded when the app restarts.
-            _saveLanguagePreference(languageCode);
-          });
-        },
-        items: <String>['English', 'Polish']
-            .map<DropdownMenuItem<String>>((String value) {
-          return DropdownMenuItem<String>(
-            value: value,
-            child: Text(value),
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-*/
 
 class ChatMessageWidget extends StatelessWidget {
   final String text;

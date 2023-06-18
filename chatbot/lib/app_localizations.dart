@@ -20,6 +20,9 @@ class AppLocalizations {
       'change_language': 'Change language',
       'english': 'English',
       'polish': 'Polish',
+      "restart_message": "Changes will apply after restarting the app.",
+      "text_to_speech": "Text to speech",
+      "speech_to_text": "Speech to text",
     },
     'pl': {
       'hello': 'Cześć',
@@ -30,6 +33,10 @@ class AppLocalizations {
       'change_language': 'Zmień język',
       'english': 'Angielski',
       'polish': 'Polski',
+      "restart_message":
+          "Zmiany zostaną wprowadzone po ponownym uruchomieniu aplikacji.",
+      "text_to_speech": "Zamiana tekstu na mowę",
+      "speech_to_text": "Lektor czytający odpowiedzi",
     },
   };
 
@@ -65,6 +72,18 @@ class AppLocalizations {
 
   String? get polish {
     return _localizedValues[locale.languageCode]?['polish'];
+  }
+
+  String? get restart_message {
+    return _localizedValues[locale.languageCode]?['restart_message'];
+  }
+
+  String? get text_to_speech {
+    return _localizedValues[locale.languageCode]?['text_to_speech'];
+  }
+
+  String? get speech_to_text {
+    return _localizedValues[locale.languageCode]?['speech_to_text'];
   }
 }
 
