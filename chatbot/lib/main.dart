@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'model.dart';
 import 'constant.dart';
+import 'settings_page.dart';
 import 'dart:async';
 import 'package:async/async.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -24,7 +25,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      localizationsDelegates: [
+      localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
       ],
@@ -35,6 +36,9 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(primarySwatch: Colors.grey),
       home: const ChatPage(),
+      routes: {
+        '/settings': (context) => SettingsPage(),
+      },
     );
   }
 }
@@ -215,17 +219,14 @@ class _ChatPageState extends State<ChatPage> {
       child: Scaffold(
         appBar: AppBar(
           title: Text('Your App'),
-          /* actions: <Widget>[
+          actions: <Widget>[
             IconButton(
               icon: Icon(Icons.settings),
               onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => SettingsPage()),
-                );
+                Navigator.pushNamed(context, '/settings');
               },
-            ), 
-          ],*/
+            ),
+          ],
         ),
         backgroundColor: Colors.white,
         body: Column(
@@ -456,7 +457,7 @@ class _ChatPageState extends State<ChatPage> {
   }
 }
 
-class SettingsPage extends StatefulWidget {
+/*class SettingsPage extends StatefulWidget {
   @override
   _SettingsPageState createState() => _SettingsPageState();
 }
@@ -468,35 +469,38 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButton<String>(
-      value: currentLanguage,
-      icon: const Icon(Icons.arrow_downward),
-      iconSize: 24,
-      elevation: 16,
-      underline: Container(
-        height: 2,
-        color: Colors.deepPurpleAccent,
+    return Material(
+      child: DropdownButton<String>(
+        value: currentLanguage,
+        icon: const Icon(Icons.arrow_downward),
+        iconSize: 24,
+        elevation: 16,
+        underline: Container(
+          height: 2,
+          color: Colors.deepPurpleAccent,
+        ),
+        onChanged: (String? newValue) {
+          setState(() {
+            currentLanguage = newValue!;
+            //_changeSpeechLocale(currentLanguage);
+            String languageCode = newValue == 'English' ? 'en-US' : 'pl-PL';
+            var setLanguage = flutterTts.setLanguage(languageCode);
+            // Save the language preference so that it can be loaded when the app restarts.
+            _saveLanguagePreference(languageCode);
+          });
+        },
+        items: <String>['English', 'Polish']
+            .map<DropdownMenuItem<String>>((String value) {
+          return DropdownMenuItem<String>(
+            value: value,
+            child: Text(value),
+          );
+        }).toList(),
       ),
-      onChanged: (String? newValue) {
-        setState(() {
-          currentLanguage = newValue!;
-          //_changeSpeechLocale(currentLanguage);
-          String languageCode = newValue == 'English' ? 'en-US' : 'pl-PL';
-          var setLanguage = flutterTts.setLanguage(languageCode);
-          // Save the language preference so that it can be loaded when the app restarts.
-          _saveLanguagePreference(languageCode);
-        });
-      },
-      items: <String>['English', 'Polish']
-          .map<DropdownMenuItem<String>>((String value) {
-        return DropdownMenuItem<String>(
-          value: value,
-          child: Text(value),
-        );
-      }).toList(),
     );
   }
 }
+*/
 
 class ChatMessageWidget extends StatelessWidget {
   final String text;
