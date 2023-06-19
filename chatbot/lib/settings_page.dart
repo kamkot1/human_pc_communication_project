@@ -26,7 +26,7 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void initState() {
     super.initState();
-    _loadPreferences();
+    // _loadPreferences();
     _loadCurrentLanguage();
   }
 
@@ -49,6 +49,7 @@ class _SettingsPageState extends State<SettingsPage> {
     });
   }
 
+/*
   void _loadPreferences() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -61,7 +62,7 @@ class _SettingsPageState extends State<SettingsPage> {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     prefs.setBool(key, value);
   }
-
+*/
   FlutterTts flutterTts = FlutterTts();
 
   @override
@@ -122,7 +123,7 @@ class _SettingsPageState extends State<SettingsPage> {
             onChanged: (bool value) {
               setState(() {
                 _textToSpeechEnabled = value;
-                _updatePreference('textToSpeechEnabled', value);
+                // _updatePreference('textToSpeechEnabled', value);
               });
             },
           ),
@@ -132,7 +133,7 @@ class _SettingsPageState extends State<SettingsPage> {
               onChanged: (bool value) {
                 setState(() {
                   _speechToTextEnabled = value;
-                  _updatePreference('speechToTextEnabled', value);
+                  // _updatePreference('speechToTextEnabled', value);
                 });
               }),
         ],
