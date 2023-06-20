@@ -36,54 +36,66 @@ class _AppLocalizationsDelegate
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeSpeechToText(); // Initialize speech recognition
-
-  SharedPreferences prefs = await SharedPreferences.getInstance();
-  String languageCode = prefs.getString('language') ?? 'en';
-  bool textToSpeechEnabled = (prefs.getBool('textToSpeechEnabled') ?? true);
-  bool speechToTextEnabled = (prefs.getBool('speechToTextEnabled') ?? true);
-
-  runApp(MyApp(
-      languageCode: languageCode,
-      textToSpeechEnabled: textToSpeechEnabled,
-      speechToTextEnabled: speechToTextEnabled));
+  runApp(MyApp());
 }
 
-class MyApp extends StatelessWidget {
-  final String languageCode;
+class MyApp extends StatefulWidget {
+  @override
+  _MyAppState createState() => _MyAppState();
+}
 
-  const MyApp(
-      {Key? key,
-      required this.languageCode,
-      required bool speechToTextEnabled,
-      required bool textToSpeechEnabled})
-      : super(key: key);
+class _MyAppState extends State<MyApp> {
+  Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      locale: Locale(languageCode),
-      localizationsDelegates: const [
-        _AppLocalizationsDelegate(),
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [
-        Locale('en', ''), // English
-        Locale('pl', ''), // Polish
-      ],
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(primarySwatch: Colors.green),
-      home: const ChatPage(),
-      routes: {
-        '/settings': (context) => SettingsPage(),
+    return FutureBuilder<SharedPreferences>(
+      future: _prefs,
+      builder:
+          (BuildContext context, AsyncSnapshot<SharedPreferences> snapshot) {
+        if (!snapshot.hasData) {
+          return CircularProgressIndicator(); // Or another loading indicator
+        }
+
+        SharedPreferences prefs = snapshot.data!;
+        String languageCode = prefs.getString('language') ?? 'en';
+        bool textToSpeechEnabled =
+            (prefs.getBool('textToSpeechEnabled') ?? true);
+        bool speechToTextEnabled =
+            (prefs.getBool('speechToTextEnabled') ?? true);
+
+        return MaterialApp(
+          locale: Locale(languageCode),
+          localizationsDelegates: const [
+            _AppLocalizationsDelegate(),
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [
+            Locale('en', ''), // English
+            Locale('pl', ''), // Polish
+          ],
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(primarySwatch: Colors.green),
+          home: ChatPage(
+            speechToTextEnabled: speechToTextEnabled,
+            textToSpeechEnabled: textToSpeechEnabled,
+          ),
+          routes: {
+            '/settings': (context) => SettingsPage(),
+          },
+        );
       },
     );
   }
 }
 
 class ChatPage extends StatefulWidget {
-  const ChatPage({super.key});
+  final bool? speechToTextEnabled;
+  final bool? textToSpeechEnabled;
+  const ChatPage(
+      {super.key, this.speechToTextEnabled, this.textToSpeechEnabled});
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -323,38 +335,41 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void startListening() {
-    if (isEditing) {
-      return;
-    }
-    timer?.cancel();
-    speech.listen(
-      onResult: (result) {
-        setState(() {
-          voiceInput = result.recognizedWords;
-          // Check if the voice input ends with "stop listening"
-          if (voiceInput.toLowerCase().endsWith('stop listening')) {
-            voiceInput = voiceInput
-                .substring(0, voiceInput.length - 'stop listening'.length)
-                .trim(); // remove "stop listening" from the voice input
-            stopListening();
-            stopListeningAfterSpeech = true;
-          } else {
-            _textController.text = voiceInput;
-          }
-
-          if (result.finalResult && !isEditing) {
-            isListening = false;
-            sendMessage(voiceInput);
-          } else {
-            timer?.cancel();
-            timer = Timer(pauseDuration, () {
+    if () {
+      // check if speech to text is enabled
+      if (isEditing) {
+        return;
+      }
+      timer?.cancel();
+      speech.listen(
+        onResult: (result) {
+          setState(() {
+            voiceInput = result.recognizedWords;
+            // Check if the voice input ends with "stop listening"
+            if (voiceInput.toLowerCase().endsWith('stop listening')) {
+              voiceInput = voiceInput
+                  .substring(0, voiceInput.length - 'stop listening'.length)
+                  .trim(); // remove "stop listening" from the voice input
               stopListening();
+              stopListeningAfterSpeech = true;
+            } else {
+              _textController.text = voiceInput;
+            }
+
+            if (result.finalResult && !isEditing) {
+              isListening = false;
               sendMessage(voiceInput);
-            });
-          }
-        });
-      },
-    );
+            } else {
+              timer?.cancel();
+              timer = Timer(pauseDuration, () {
+                stopListening();
+                sendMessage(voiceInput);
+              });
+            }
+          });
+        },
+      );
+    }
   }
 
   void resetListeningAfterSpeech() {
