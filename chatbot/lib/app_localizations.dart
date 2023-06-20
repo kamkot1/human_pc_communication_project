@@ -35,7 +35,7 @@ class AppLocalizations {
       'polish': 'Polski',
       "restart_message":
           "Zmiany zostaną wprowadzone po ponownym uruchomieniu aplikacji.",
-      "text_to_speech": "Zamiana tekstu na mowę",
+      "text_to_speech": "Zamiana mowy na tekst",
       "speech_to_text": "Lektor czytający odpowiedzi",
     },
   };

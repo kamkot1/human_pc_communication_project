@@ -237,7 +237,7 @@ class _ChatPageState extends State<ChatPage> {
       Map<String, dynamic> responseBody = jsonDecode(response.body);
       String newresponse = responseBody['choices'][0]['message']['content'];
       //jeżeli był użyty mikrofon, wtedy przeczytaj
-      if (wasVoiceInput) {
+      if (wasVoiceInput && widget.textToSpeechEnabled!) {
         await flutterTts.speak(newresponse);
       }
       return newresponse;
@@ -335,7 +335,7 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void startListening() {
-    if () {
+    if (widget.speechToTextEnabled == true) {
       // check if speech to text is enabled
       if (isEditing) {
         return;
@@ -385,65 +385,84 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void cancelRequest() {
-    currentOperation?.cancel();
+    cancelCurrentOperation();
     setState(() {
       isRequestInProgress = false;
     });
   }
 
+  void cancelCurrentOperation() {
+    currentOperation?.cancel();
+  }
+
   //Przycisk wysłania zapytania TODO: Wyłączyć animację naciśnięcia
   Widget _buildSubmit() {
     return Visibility(
-      visible: !isLoading,
-      child: Container(
-        color: botBackgroundColor,
-        child: Row(
-          children: [
-            IconButton(
-              icon: Icon(
-                Icons.mic,
-                color: Colors.black87,
-              ),
-              onPressed: () {
-                setState(() {
-                  startListening();
-                });
-              },
-            ),
-            IconButton(
-              icon: Icon(
-                Icons.send_rounded,
-                color: Colors.black87,
-              ),
-              onPressed: () {
-                setState(() {
-                  if (_textController.text.isNotEmpty) {
-                    bool voiceInputted = voiceInput == _textController.text;
-                    _messages.add(ChatMessage(
-                        text: _textController.text,
-                        chatMessageType: ChatMessageType.user,
-                        wasVoiceInput: voiceInputted));
-                    isLoading = true;
-                    Future.delayed(const Duration(milliseconds: 50))
-                        .then((value) => _scrollDown());
-                    generateResponse(_textController.text, voiceInputted)
-                        .then((value) {
-                      setState(() {
-                        isLoading = false;
-                        _messages.add(ChatMessage(
-                            text: value,
-                            chatMessageType: ChatMessageType.bot,
-                            wasVoiceInput: false));
-                      });
+      visible: !isRequestInProgress,
+      child: Stack(
+        children: [
+          Container(
+            color: botBackgroundColor,
+            child: Row(
+              children: [
+                IconButton(
+                  icon: Icon(
+                    Icons.mic,
+                    color: Colors.black87,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      startListening();
                     });
-                    _textController.clear();
-                    voiceInput = '';
-                  }
-                });
-              },
+                  },
+                ),
+                IconButton(
+                  icon: Icon(
+                    Icons.send_rounded,
+                    color: Colors.black87,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      if (_textController.text.isNotEmpty) {
+                        bool voiceInputted = voiceInput == _textController.text;
+                        _messages.add(ChatMessage(
+                            text: _textController.text,
+                            chatMessageType: ChatMessageType.user,
+                            wasVoiceInput: voiceInputted));
+                        isLoading = true;
+                        Future.delayed(const Duration(milliseconds: 50))
+                            .then((value) => _scrollDown());
+                        generateResponse(_textController.text, voiceInputted)
+                            .then((value) {
+                          setState(() {
+                            isLoading = false;
+                            _messages.add(ChatMessage(
+                                text: value,
+                                chatMessageType: ChatMessageType.bot,
+                                wasVoiceInput: false));
+                          });
+                        });
+                        _textController.clear();
+                        voiceInput = '';
+                      }
+                    });
+                  },
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          Positioned(
+            right: 8,
+            top: 8,
+            child: isRequestInProgress
+                ? IconButton(
+                    icon: Icon(Icons.cancel),
+                    color: Colors.red,
+                    onPressed: cancelRequest,
+                  )
+                : SizedBox(),
+          ),
+        ],
       ),
     );
   }
