@@ -487,12 +487,24 @@ class _ChatPageState extends State<ChatPage> {
     return Expanded(
       child: Container(
         margin: EdgeInsets.fromLTRB(
-            20.0, 0.0, 10.0, 10.0), // Left, Top, Right, Bottom
+            20.0, 5.0, 0.0, 10.0), // Left, Top, Right, Bottom
         child: TextField(
             decoration: InputDecoration(
               hintText: AppLocalizations.of(context)?.inputPlaceholder ?? '',
               hintStyle: TextStyle(color: Color.fromARGB(136, 151, 151, 151)),
-              border: InputBorder.none,
+              //border: inputBorder.none,
+              filled: true,
+              fillColor: Color.fromARGB(207, 243, 243, 243),
+              enabledBorder: OutlineInputBorder(
+                borderSide: BorderSide.none,
+                borderRadius: BorderRadius.all(
+                    Radius.circular(20)), // adjust the radius as needed
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderSide: BorderSide.none,
+                borderRadius: BorderRadius.all(
+                    Radius.circular(20)), // adjust the radius as needed
+              ),
             ),
             focusNode: _focusNode,
             textCapitalization: TextCapitalization.sentences,
