@@ -8,6 +8,7 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'app_localizations.dart';
+import 'dart:convert' as convert;
 import 'model.dart';
 import 'constant.dart';
 import 'settings_page.dart';
@@ -102,10 +103,9 @@ class ChatPage extends StatefulWidget {
 }
 
 int currentPage = 0;
-const backgroundColor = Color.fromARGB(97, 247, 247, 247);
-const botBackgroundColor = Color.fromARGB(87, 222, 222, 222);
+const backgroundColor = Color.fromARGB(96, 255, 255, 255);
+const botBackgroundColor = Color.fromARGB(85, 255, 255, 255);
 late bool isLoading;
-late bool isListening;
 bool isEditing = false;
 // ignore: prefer_final_fields
 TextEditingController _textController = TextEditingController();
@@ -157,12 +157,14 @@ Future<bool> requestMicrophonePermission() async {
 class _ChatPageState extends State<ChatPage> {
   late FocusNode _focusNode;
   CancelableOperation<String>? currentOperation;
+  ValueNotifier<bool> isListening = ValueNotifier<bool>(false);
+  final List<ChatMessage> _messages = []; // Move this line here
   @override
   void initState() {
     // TODO: implement initState
     super.initState();
     isLoading = false;
-    isListening = false;
+    isListening.value = false;
 
     void _handleFocusChange() {
       if (_focusNode.hasFocus) {
@@ -171,7 +173,7 @@ class _ChatPageState extends State<ChatPage> {
       } else {
         // TextField straiło focus
         isEditing = false;
-        if (isListening) {
+        if (isListening.value) {
           stopListening();
           sendMessage(voiceInput);
         }
@@ -234,7 +236,8 @@ class _ChatPageState extends State<ChatPage> {
     //prompt od usera
     //zdekoduj wiadomość
     if (response.statusCode == 200) {
-      Map<String, dynamic> responseBody = jsonDecode(response.body);
+      Map<String, dynamic> responseBody =
+          convert.jsonDecode(convert.utf8.decode(response.bodyBytes));
       String newresponse = responseBody['choices'][0]['message']['content'];
       //jeżeli był użyty mikrofon, wtedy przeczytaj
       if (wasVoiceInput && widget.textToSpeechEnabled!) {
@@ -262,36 +265,50 @@ class _ChatPageState extends State<ChatPage> {
           ],
         ),
         backgroundColor: Colors.white,
-        body: Column(
+        body: Stack(
           children: [
-            //chat body
-            Expanded(
-              child: _buildList(),
+            Column(
+              children: [
+                //chat body
+                Expanded(
+                  child: _buildList(),
+                ),
+                Visibility(
+                  visible: isLoading,
+                  child: const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    children: [
+                      //input
+                      _buildInput(),
+
+                      //submit
+                      _buildSubmit(),
+                    ],
+                  ),
+                )
+              ],
             ),
-            Visibility(
-              visible: isLoading,
-              child: const Padding(
-                padding: EdgeInsets.all(8.0),
-                child: CircularProgressIndicator(
-                  color: Colors.white,
+            if (isListening.value == true)
+              Center(
+                child: FloatingActionButton.extended(
+                  onPressed: () {
+                    setState(() {
+                      stopListening();
+                    });
+                  },
+                  icon: Icon(Icons.stop),
+                  label:
+                      Text(AppLocalizations.of(context)?.stopListening ?? ''),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Row(
-                children: [
-                  //input
-                  _buildInput(),
-
-                  //submit
-                  _buildSubmit(),
-
-                  //głosowy Submit
-                  //_buildVoiceInput()
-                ],
-              ),
-            )
           ],
         ),
       ),
@@ -303,13 +320,15 @@ class _ChatPageState extends State<ChatPage> {
       Duration(seconds: 2); // Change to fit requirements
 
   void sendMessage(voiceInput) {
-    if (_textController.text.isNotEmpty) {
+    if (_textController.text.isNotEmpty && !isListening.value) {
       isRequestInProgress = true;
       bool voiceInputted = voiceInput == _textController.text;
-      _messages.add(ChatMessage(
-          text: _textController.text,
-          chatMessageType: ChatMessageType.user,
-          wasVoiceInput: voiceInputted));
+      setState(() {
+        _messages.add(ChatMessage(
+            text: _textController.text,
+            chatMessageType: ChatMessageType.user,
+            wasVoiceInput: voiceInputted));
+      });
       isLoading = true;
       Future.delayed(const Duration(milliseconds: 50))
           .then((value) => _scrollDown());
@@ -330,12 +349,13 @@ class _ChatPageState extends State<ChatPage> {
 
   void stopListening() {
     timer?.cancel();
-    isListening = false;
+    isListening.value = false;
     speech.stop();
   }
 
   void startListening() {
     if (widget.speechToTextEnabled == true) {
+      isListening.value = true;
       // check if speech to text is enabled
       if (isEditing) {
         return;
@@ -357,13 +377,15 @@ class _ChatPageState extends State<ChatPage> {
             }
 
             if (result.finalResult && !isEditing) {
-              isListening = false;
+              isListening.value = false;
+              timer?.cancel(); // Cancel the timer when the result is final
               sendMessage(voiceInput);
+              isListening.value = false;
             } else {
               timer?.cancel();
               timer = Timer(pauseDuration, () {
                 stopListening();
-                sendMessage(voiceInput);
+                isListening.value = false;
               });
             }
           });
@@ -402,6 +424,7 @@ class _ChatPageState extends State<ChatPage> {
       child: Stack(
         children: [
           Container(
+            margin: EdgeInsets.fromLTRB(0.0, 0.0, 0.0, 10.0),
             color: botBackgroundColor,
             child: Row(
               children: [
@@ -409,6 +432,7 @@ class _ChatPageState extends State<ChatPage> {
                   icon: Icon(
                     Icons.mic,
                     color: Colors.black87,
+                    size: 30,
                   ),
                   onPressed: () {
                     setState(() {
@@ -420,6 +444,7 @@ class _ChatPageState extends State<ChatPage> {
                   icon: Icon(
                     Icons.send_rounded,
                     color: Colors.black87,
+                    size: 30,
                   ),
                   onPressed: () {
                     setState(() {
@@ -432,16 +457,6 @@ class _ChatPageState extends State<ChatPage> {
                         isLoading = true;
                         Future.delayed(const Duration(milliseconds: 50))
                             .then((value) => _scrollDown());
-                        generateResponse(_textController.text, voiceInputted)
-                            .then((value) {
-                          setState(() {
-                            isLoading = false;
-                            _messages.add(ChatMessage(
-                                text: value,
-                                chatMessageType: ChatMessageType.bot,
-                                wasVoiceInput: false));
-                          });
-                        });
                         _textController.clear();
                         voiceInput = '';
                       }
@@ -470,22 +485,31 @@ class _ChatPageState extends State<ChatPage> {
   //Interfejs dla inputu użytkownika TODO: Dodać opcję inputu głosowego
   Expanded _buildInput() {
     return Expanded(
-      child: TextField(
-          focusNode: _focusNode,
-          textCapitalization: TextCapitalization.sentences,
-          style: const TextStyle(color: Colors.black),
-          controller: _textController,
-          onChanged: (text) {
-            setState(() {
-              isEditing = true; // Użytkownik jest w trakcie edycji
-              timer?.cancel(); // Cancel the timer
-              if (isListening) {
-                // If listening, stop
-                speech.stop();
-              }
-              voiceInput = text;
-            });
-          }),
+      child: Container(
+        margin: EdgeInsets.fromLTRB(
+            20.0, 0.0, 10.0, 10.0), // Left, Top, Right, Bottom
+        child: TextField(
+            decoration: InputDecoration(
+              hintText: AppLocalizations.of(context)?.inputPlaceholder ?? '',
+              hintStyle: TextStyle(color: Color.fromARGB(136, 151, 151, 151)),
+              border: InputBorder.none,
+            ),
+            focusNode: _focusNode,
+            textCapitalization: TextCapitalization.sentences,
+            style: const TextStyle(color: Colors.black),
+            controller: _textController,
+            onChanged: (text) {
+              setState(() {
+                isEditing = true; // Użytkownik jest w trakcie edycji
+                timer?.cancel(); // Cancel the timer
+                if (isListening.value) {
+                  // If listening, stop
+                  speech.stop();
+                }
+                voiceInput = text;
+              });
+            }),
+      ),
     );
   }
 
@@ -497,18 +521,60 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  ListView _buildList() {
-    return ListView.builder(
-        itemCount: _messages.length,
+  Widget _buildList() {
+    if (_messages.isEmpty) {
+      return ListView(
+        children: [
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  AppLocalizations.of(context)?.welcomeMessage ?? '',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 18, color: Colors.grey),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    } else {
+      return ListView.builder(
+        itemCount: _messages.length + (isListening.value ? 1 : 0),
         controller: _scrollController,
         itemBuilder: ((context, index) {
-          var message = _messages[index];
-
-          return ChatMessageWidget(
-            text: message.text,
-            chatMessageType: message.chatMessageType,
-          );
-        }));
+          if (index < _messages.length) {
+            var message = _messages[index];
+            return ChatMessageWidget(
+              text: message.text,
+              chatMessageType: message.chatMessageType,
+            );
+          } else if (isListening.value) {
+            return Container(
+              padding: EdgeInsets.all(16.0),
+              child: ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    stopListening();
+                  });
+                },
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.stop),
+                    SizedBox(width: 8.0),
+                    Text("Stop Listening"),
+                  ],
+                ),
+              ),
+            );
+          } else {
+            return SizedBox.shrink(); // This should never be reached
+          }
+        }),
+      );
+    }
   }
 }
 
@@ -522,47 +588,47 @@ class ChatMessageWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 10),
-      padding: const EdgeInsets.all(16),
-      color: chatMessageType == ChatMessageType.bot
-          ? botBackgroundColor
-          : backgroundColor,
       child: Row(
+        mainAxisAlignment: chatMessageType == ChatMessageType.bot
+            ? MainAxisAlignment.start
+            : MainAxisAlignment.end,
         children: [
           chatMessageType == ChatMessageType.bot
               ? Container(
                   margin: const EdgeInsets.only(right: 16),
-                  child: CircleAvatar(
-                    backgroundColor: const Color.fromRGBO(16, 163, 127, 1),
-                    child: Image.asset('images/gpticon.jpg'),
+                  child: const CircleAvatar(
+                    //backgroundColor: const Color.fromRGBO(16, 163, 127, 1),
+                    //child: Image.asset('images/ChatGPT_logo.svg'),
+                    child: Icon(Icons.bubble_chart_outlined),
                   ),
                 )
-              : Container(
-                  margin: const EdgeInsets.only(right: 16),
+              : Container(),
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: chatMessageType == ChatMessageType.bot
+                    ? botBackgroundColor
+                    : backgroundColor,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                text,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyLarge
+                    ?.copyWith(color: Colors.black),
+              ),
+            ),
+          ),
+          chatMessageType == ChatMessageType.user
+              ? Container(
+                  margin: const EdgeInsets.only(left: 16),
                   child: const CircleAvatar(
                     child: Icon(Icons.person),
-                  )),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: const BoxDecoration(
-                    borderRadius: BorderRadius.all(
-                      Radius.circular(8),
-                    ),
-                  ),
-                  child: Text(
-                    text,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyLarge
-                        ?.copyWith(color: Colors.black),
                   ),
                 )
-              ],
-            ),
-          )
+              : Container(),
         ],
       ),
     );

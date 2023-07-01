@@ -116,23 +116,31 @@ class _SettingsPageState extends State<SettingsPage> {
               );
             }).toList(),
           ),
+          Divider(), // Add a divider
+          // Speech-to-text setting
           SwitchListTile(
             title: Text(AppLocalizations.of(context)?.text_to_speech ?? ''),
-            value: _textToSpeechEnabled,
+            subtitle: Text(AppLocalizations.of(context)?.text_to_speech ??
+                ''), // Add a description
+            value: _speechToTextEnabled,
             onChanged: (bool value) {
               setState(() {
-                _textToSpeechEnabled = value;
-                _updatePreference('textToSpeechEnabled', value);
+                _speechToTextEnabled = value;
+                _updatePreference('speechToTextEnabled', value);
               });
             },
           ),
+          Divider(), // Add a divider
+          // Text-to-speech setting
           SwitchListTile(
               title: Text(AppLocalizations.of(context)?.speech_to_text ?? ''),
-              value: _speechToTextEnabled,
+              subtitle: Text(AppLocalizations.of(context)?.speech_to_text ??
+                  ''), // Add a description
+              value: _textToSpeechEnabled,
               onChanged: (bool value) {
                 setState(() {
-                  _speechToTextEnabled = value;
-                  _updatePreference('speechToTextEnabled', value);
+                  _textToSpeechEnabled = value;
+                  _updatePreference('textToSpeechEnabled', value);
                 });
               }),
         ],
