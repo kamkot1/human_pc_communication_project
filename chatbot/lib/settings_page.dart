@@ -20,8 +20,8 @@ class _SettingsPageState extends State<SettingsPage> {
   String _currentLanguage = 'English';
   String _currentLanguageCode = 'en';
 
-  bool _textToSpeechEnabled = true;
   bool _speechToTextEnabled = true;
+  bool _textToSpeechEnabled = true;
 
   @override
   void initState() {
@@ -52,8 +52,8 @@ class _SettingsPageState extends State<SettingsPage> {
   void _loadPreferences() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
-      _textToSpeechEnabled = (prefs.getBool('textToSpeechEnabled') ?? true);
-      _speechToTextEnabled = (prefs.getBool('speechToTextEnabled') ?? true);
+      _speechToTextEnabled = (prefs.getBool('textToSpeechEnabled') ?? false);
+      _textToSpeechEnabled = (prefs.getBool('speechToTextEnabled') ?? false);
     });
   }
 
@@ -122,10 +122,10 @@ class _SettingsPageState extends State<SettingsPage> {
             title: Text(AppLocalizations.of(context)?.text_to_speech ?? ''),
             subtitle: Text(AppLocalizations.of(context)?.text_to_speech ??
                 ''), // Add a description
-            value: _speechToTextEnabled,
+            value: _textToSpeechEnabled,
             onChanged: (bool value) {
               setState(() {
-                _speechToTextEnabled = value;
+                _textToSpeechEnabled = value;
                 _updatePreference('speechToTextEnabled', value);
               });
             },
@@ -136,10 +136,10 @@ class _SettingsPageState extends State<SettingsPage> {
               title: Text(AppLocalizations.of(context)?.speech_to_text ?? ''),
               subtitle: Text(AppLocalizations.of(context)?.speech_to_text ??
                   ''), // Add a description
-              value: _textToSpeechEnabled,
+              value: _speechToTextEnabled,
               onChanged: (bool value) {
                 setState(() {
-                  _textToSpeechEnabled = value;
+                  _speechToTextEnabled = value;
                   _updatePreference('textToSpeechEnabled', value);
                 });
               }),

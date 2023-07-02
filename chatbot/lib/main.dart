@@ -41,6 +41,8 @@ void main() async {
 }
 
 class MyApp extends StatefulWidget {
+  const MyApp({super.key});
+
   @override
   _MyAppState createState() => _MyAppState();
 }
@@ -61,9 +63,9 @@ class _MyAppState extends State<MyApp> {
         SharedPreferences prefs = snapshot.data!;
         String languageCode = prefs.getString('language') ?? 'en';
         bool textToSpeechEnabled =
-            (prefs.getBool('textToSpeechEnabled') ?? true);
+            (prefs.getBool('textToSpeechEnabled') ?? false);
         bool speechToTextEnabled =
-            (prefs.getBool('speechToTextEnabled') ?? true);
+            (prefs.getBool('speechToTextEnabled') ?? false);
 
         return MaterialApp(
           locale: Locale(languageCode),
@@ -226,7 +228,7 @@ class _ChatPageState extends State<ChatPage> {
         body: jsonEncode({
           'model': 'gpt-3.5-turbo',
           'messages': messages,
-          'temperature': 0.5,
+          'temperature': 0.8,
           'max_tokens': 2000,
           'top_p': 1,
           'frequency_penalty': 0.0,
@@ -418,6 +420,7 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   //Przycisk wysłania zapytania TODO: Wyłączyć animację naciśnięcia
+
   Widget _buildSubmit() {
     return Visibility(
       visible: !isRequestInProgress,
@@ -448,18 +451,7 @@ class _ChatPageState extends State<ChatPage> {
                   ),
                   onPressed: () {
                     setState(() {
-                      if (_textController.text.isNotEmpty) {
-                        bool voiceInputted = voiceInput == _textController.text;
-                        _messages.add(ChatMessage(
-                            text: _textController.text,
-                            chatMessageType: ChatMessageType.user,
-                            wasVoiceInput: voiceInputted));
-                        isLoading = true;
-                        Future.delayed(const Duration(milliseconds: 50))
-                            .then((value) => _scrollDown());
-                        _textController.clear();
-                        voiceInput = '';
-                      }
+                      sendMessage(_textController.text);
                     });
                   },
                 ),
@@ -482,29 +474,16 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  //Interfejs dla inputu użytkownika TODO: Dodać opcję inputu głosowego
-  Expanded _buildInput() {
+  Widget _buildInput() {
     return Expanded(
       child: Container(
         margin: EdgeInsets.fromLTRB(
-            20.0, 5.0, 0.0, 10.0), // Left, Top, Right, Bottom
+            20.0, 0.0, 10.0, 10.0), // Left, Top, Right, Bottom
         child: TextField(
             decoration: InputDecoration(
               hintText: AppLocalizations.of(context)?.inputPlaceholder ?? '',
               hintStyle: TextStyle(color: Color.fromARGB(136, 151, 151, 151)),
-              //border: inputBorder.none,
-              filled: true,
-              fillColor: Color.fromARGB(207, 243, 243, 243),
-              enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide.none,
-                borderRadius: BorderRadius.all(
-                    Radius.circular(20)), // adjust the radius as needed
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide.none,
-                borderRadius: BorderRadius.all(
-                    Radius.circular(20)), // adjust the radius as needed
-              ),
+              border: InputBorder.none,
             ),
             focusNode: _focusNode,
             textCapitalization: TextCapitalization.sentences,
@@ -512,7 +491,7 @@ class _ChatPageState extends State<ChatPage> {
             controller: _textController,
             onChanged: (text) {
               setState(() {
-                isEditing = true; // Użytkownik jest w trakcie edycji
+                isEditing = true; // User is editing
                 timer?.cancel(); // Cancel the timer
                 if (isListening.value) {
                   // If listening, stop
@@ -520,6 +499,9 @@ class _ChatPageState extends State<ChatPage> {
                 }
                 voiceInput = text;
               });
+            },
+            onSubmitted: (text) {
+              sendMessage(text);
             }),
       ),
     );
@@ -535,21 +517,15 @@ class _ChatPageState extends State<ChatPage> {
 
   Widget _buildList() {
     if (_messages.isEmpty) {
-      return ListView(
-        children: [
-          Expanded(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  AppLocalizations.of(context)?.welcomeMessage ?? '',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 18, color: Colors.grey),
-                ),
-              ),
-            ),
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text(
+            AppLocalizations.of(context)?.welcomeMessage ?? '',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 18, color: Colors.grey),
           ),
-        ],
+        ),
       );
     } else {
       return ListView.builder(
