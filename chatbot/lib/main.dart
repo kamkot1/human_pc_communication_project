@@ -8,12 +8,15 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'app_localizations.dart';
+import 'dart:convert' as convert;
 import 'model.dart';
 import 'constant.dart';
 import 'settings_page.dart';
+import 'settings_service.dart';
 import 'dart:async';
 import 'package:async/async.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 
 class _AppLocalizationsDelegate
     extends LocalizationsDelegate<AppLocalizations> {
@@ -35,37 +38,31 @@ class _AppLocalizationsDelegate
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await initializeSpeechToText(); // Initialize speech recognition
-  runApp(MyApp());
+
+  final prefs = await SharedPreferences.getInstance();
+
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => SettingsService(prefs),
+      child: MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatefulWidget {
+  const MyApp({super.key});
+
   @override
   _MyAppState createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> {
-  Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
-
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<SharedPreferences>(
-      future: _prefs,
-      builder:
-          (BuildContext context, AsyncSnapshot<SharedPreferences> snapshot) {
-        if (!snapshot.hasData) {
-          return CircularProgressIndicator(); // Or another loading indicator
-        }
-
-        SharedPreferences prefs = snapshot.data!;
-        String languageCode = prefs.getString('language') ?? 'en';
-        bool textToSpeechEnabled =
-            (prefs.getBool('textToSpeechEnabled') ?? true);
-        bool speechToTextEnabled =
-            (prefs.getBool('speechToTextEnabled') ?? true);
-
+    return Consumer<SettingsService>(
+      builder: (context, settingsService, child) {
         return MaterialApp(
-          locale: Locale(languageCode),
+          locale: Locale(settingsService.currentLanguageCode),
           localizationsDelegates: const [
             _AppLocalizationsDelegate(),
             GlobalMaterialLocalizations.delegate,
@@ -79,8 +76,8 @@ class _MyAppState extends State<MyApp> {
           debugShowCheckedModeBanner: false,
           theme: ThemeData(primarySwatch: Colors.green),
           home: ChatPage(
-            speechToTextEnabled: speechToTextEnabled,
-            textToSpeechEnabled: textToSpeechEnabled,
+            speechToTextEnabled: settingsService.speechToTextEnabled,
+            textToSpeechEnabled: settingsService.textToSpeechEnabled,
           ),
           routes: {
             '/settings': (context) => SettingsPage(),
@@ -102,10 +99,9 @@ class ChatPage extends StatefulWidget {
 }
 
 int currentPage = 0;
-const backgroundColor = Color.fromARGB(97, 247, 247, 247);
-const botBackgroundColor = Color.fromARGB(87, 222, 222, 222);
+const backgroundColor = Color.fromARGB(96, 255, 255, 255);
+const botBackgroundColor = Color.fromARGB(84, 250, 250, 250);
 late bool isLoading;
-late bool isListening;
 bool isEditing = false;
 // ignore: prefer_final_fields
 TextEditingController _textController = TextEditingController();
@@ -157,12 +153,15 @@ Future<bool> requestMicrophonePermission() async {
 class _ChatPageState extends State<ChatPage> {
   late FocusNode _focusNode;
   CancelableOperation<String>? currentOperation;
+  ValueNotifier<bool> isListening = ValueNotifier<bool>(false);
+  final List<ChatMessage> _messages = []; // Move this line here
   @override
   void initState() {
     // TODO: implement initState
     super.initState();
     isLoading = false;
-    isListening = false;
+    isListening.value = false;
+    initializeSpeechRecognition();
 
     void _handleFocusChange() {
       if (_focusNode.hasFocus) {
@@ -171,7 +170,7 @@ class _ChatPageState extends State<ChatPage> {
       } else {
         // TextField straiło focus
         isEditing = false;
-        if (isListening) {
+        if (isListening.value) {
           stopListening();
           sendMessage(voiceInput);
         }
@@ -203,18 +202,27 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
+  String? lastLanguageUsed;
   Future<String> generateResponse(String prompt, bool wasVoiceInput) async {
     const apiKey = apiSecretKey;
     var url = Uri.https("api.openai.com", "/v1/chat/completions");
 
-    final messages = [
-      {
-        'role': 'system',
-        'content':
-            'You can start the conversation with a system message if needed.',
-      },
-      {'role': 'user', 'content': prompt},
-    ];
+    // Check if the language has changed
+    bool languageChanged =
+        lastLanguageUsed != null && lastLanguageUsed != currentLanguage;
+
+    // Include a system message with the current language if it has changed
+    final messages = languageChanged
+        ? [
+            {
+              'role': 'system',
+              'content': 'The current language is $currentLanguage.'
+            },
+            {'role': 'user', 'content': prompt}
+          ]
+        : [
+            {'role': 'user', 'content': prompt}
+          ];
 
     final response = await http.post(url,
         headers: {
@@ -224,22 +232,25 @@ class _ChatPageState extends State<ChatPage> {
         body: jsonEncode({
           'model': 'gpt-3.5-turbo',
           'messages': messages,
-          'temperature': 0.5,
+          'temperature': 0.8,
           'max_tokens': 2000,
           'top_p': 1,
           'frequency_penalty': 0.0,
           'presence_penalty': 0.0
         }));
 
-    //prompt od usera
-    //zdekoduj wiadomość
     if (response.statusCode == 200) {
-      Map<String, dynamic> responseBody = jsonDecode(response.body);
+      Map<String, dynamic> responseBody =
+          convert.jsonDecode(convert.utf8.decode(response.bodyBytes));
       String newresponse = responseBody['choices'][0]['message']['content'];
-      //jeżeli był użyty mikrofon, wtedy przeczytaj
+
       if (wasVoiceInput && widget.textToSpeechEnabled!) {
         await flutterTts.speak(newresponse);
       }
+
+      // Update lastLanguageUsed to the current language
+      lastLanguageUsed = currentLanguage;
+
       return newresponse;
     } else {
       throw Exception('Failed to generate response: ${response.statusCode}');
@@ -262,36 +273,50 @@ class _ChatPageState extends State<ChatPage> {
           ],
         ),
         backgroundColor: Colors.white,
-        body: Column(
+        body: Stack(
           children: [
-            //chat body
-            Expanded(
-              child: _buildList(),
+            Column(
+              children: [
+                //chat body
+                Expanded(
+                  child: _buildList(),
+                ),
+                Visibility(
+                  visible: isLoading,
+                  child: const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    children: [
+                      //input
+                      _buildInput(),
+
+                      //submit
+                      _buildSubmit(),
+                    ],
+                  ),
+                )
+              ],
             ),
-            Visibility(
-              visible: isLoading,
-              child: const Padding(
-                padding: EdgeInsets.all(8.0),
-                child: CircularProgressIndicator(
-                  color: Colors.white,
+            if (isListening.value == true)
+              Center(
+                child: FloatingActionButton.extended(
+                  onPressed: () {
+                    setState(() {
+                      stopListening();
+                    });
+                  },
+                  icon: Icon(Icons.stop),
+                  label:
+                      Text(AppLocalizations.of(context)?.stopListening ?? ''),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Row(
-                children: [
-                  //input
-                  _buildInput(),
-
-                  //submit
-                  _buildSubmit(),
-
-                  //głosowy Submit
-                  //_buildVoiceInput()
-                ],
-              ),
-            )
           ],
         ),
       ),
@@ -303,13 +328,15 @@ class _ChatPageState extends State<ChatPage> {
       Duration(seconds: 2); // Change to fit requirements
 
   void sendMessage(voiceInput) {
-    if (_textController.text.isNotEmpty) {
+    if (_textController.text.isNotEmpty && !isListening.value) {
       isRequestInProgress = true;
       bool voiceInputted = voiceInput == _textController.text;
-      _messages.add(ChatMessage(
-          text: _textController.text,
-          chatMessageType: ChatMessageType.user,
-          wasVoiceInput: voiceInputted));
+      setState(() {
+        _messages.add(ChatMessage(
+            text: _textController.text,
+            chatMessageType: ChatMessageType.user,
+            wasVoiceInput: voiceInputted));
+      });
       isLoading = true;
       Future.delayed(const Duration(milliseconds: 50))
           .then((value) => _scrollDown());
@@ -330,12 +357,13 @@ class _ChatPageState extends State<ChatPage> {
 
   void stopListening() {
     timer?.cancel();
-    isListening = false;
+    isListening.value = false;
     speech.stop();
   }
 
   void startListening() {
     if (widget.speechToTextEnabled == true) {
+      isListening.value = true;
       // check if speech to text is enabled
       if (isEditing) {
         return;
@@ -357,13 +385,15 @@ class _ChatPageState extends State<ChatPage> {
             }
 
             if (result.finalResult && !isEditing) {
-              isListening = false;
+              isListening.value = false;
+              timer?.cancel(); // Cancel the timer when the result is final
               sendMessage(voiceInput);
+              isListening.value = false;
             } else {
               timer?.cancel();
               timer = Timer(pauseDuration, () {
                 stopListening();
-                sendMessage(voiceInput);
+                isListening.value = false;
               });
             }
           });
@@ -396,12 +426,14 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   //Przycisk wysłania zapytania TODO: Wyłączyć animację naciśnięcia
+
   Widget _buildSubmit() {
     return Visibility(
       visible: !isRequestInProgress,
       child: Stack(
         children: [
           Container(
+            margin: EdgeInsets.fromLTRB(0.0, 0.0, 0.0, 10.0),
             color: botBackgroundColor,
             child: Row(
               children: [
@@ -409,6 +441,7 @@ class _ChatPageState extends State<ChatPage> {
                   icon: Icon(
                     Icons.mic,
                     color: Colors.black87,
+                    size: 30,
                   ),
                   onPressed: () {
                     setState(() {
@@ -420,31 +453,11 @@ class _ChatPageState extends State<ChatPage> {
                   icon: Icon(
                     Icons.send_rounded,
                     color: Colors.black87,
+                    size: 30,
                   ),
                   onPressed: () {
                     setState(() {
-                      if (_textController.text.isNotEmpty) {
-                        bool voiceInputted = voiceInput == _textController.text;
-                        _messages.add(ChatMessage(
-                            text: _textController.text,
-                            chatMessageType: ChatMessageType.user,
-                            wasVoiceInput: voiceInputted));
-                        isLoading = true;
-                        Future.delayed(const Duration(milliseconds: 50))
-                            .then((value) => _scrollDown());
-                        generateResponse(_textController.text, voiceInputted)
-                            .then((value) {
-                          setState(() {
-                            isLoading = false;
-                            _messages.add(ChatMessage(
-                                text: value,
-                                chatMessageType: ChatMessageType.bot,
-                                wasVoiceInput: false));
-                          });
-                        });
-                        _textController.clear();
-                        voiceInput = '';
-                      }
+                      sendMessage(_textController.text);
                     });
                   },
                 ),
@@ -467,25 +480,49 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  //Interfejs dla inputu użytkownika TODO: Dodać opcję inputu głosowego
-  Expanded _buildInput() {
+  Widget _buildInput() {
     return Expanded(
-      child: TextField(
-          focusNode: _focusNode,
-          textCapitalization: TextCapitalization.sentences,
-          style: const TextStyle(color: Colors.black),
-          controller: _textController,
-          onChanged: (text) {
-            setState(() {
-              isEditing = true; // Użytkownik jest w trakcie edycji
-              timer?.cancel(); // Cancel the timer
-              if (isListening) {
-                // If listening, stop
-                speech.stop();
-              }
-              voiceInput = text;
-            });
-          }),
+      child: Container(
+        margin: EdgeInsets.fromLTRB(
+            20.0, 0.0, 10.0, 10.0), // Left, Top, Right, Bottom
+        child: TextField(
+            decoration: InputDecoration(
+              hintText: AppLocalizations.of(context)?.inputPlaceholder ?? '',
+              hintStyle: TextStyle(color: Color.fromARGB(136, 151, 151, 151)),
+              filled: true,
+              fillColor: Color.fromARGB(207, 243, 243, 243),
+              enabledBorder: OutlineInputBorder(
+                borderSide: BorderSide.none,
+                borderRadius: BorderRadius.all(
+                  Radius.circular(20),
+                ), // adjust the radius as needed
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderSide: BorderSide.none,
+                borderRadius: BorderRadius.all(
+                  Radius.circular(20),
+                ), // adjust the radius as needed
+              ),
+            ),
+            focusNode: _focusNode,
+            textCapitalization: TextCapitalization.sentences,
+            style: const TextStyle(color: Colors.black),
+            controller: _textController,
+            onChanged: (text) {
+              setState(() {
+                isEditing = true; // User is editing
+                timer?.cancel(); // Cancel the timer
+                if (isListening.value) {
+                  // If listening, stop
+                  speech.stop();
+                }
+                voiceInput = text;
+              });
+            },
+            onSubmitted: (text) {
+              sendMessage(text);
+            }),
+      ),
     );
   }
 
@@ -497,18 +534,35 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  ListView _buildList() {
-    return ListView.builder(
-        itemCount: _messages.length,
+  Widget _buildList() {
+    if (_messages.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text(
+            AppLocalizations.of(context)?.welcomeMessage ?? '',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 18, color: Colors.grey),
+          ),
+        ),
+      );
+    } else {
+      return ListView.builder(
+        itemCount: _messages.length + (isListening.value ? 1 : 0),
         controller: _scrollController,
         itemBuilder: ((context, index) {
-          var message = _messages[index];
-
-          return ChatMessageWidget(
-            text: message.text,
-            chatMessageType: message.chatMessageType,
-          );
-        }));
+          if (index < _messages.length) {
+            var message = _messages[index];
+            return ChatMessageWidget(
+              text: message.text,
+              chatMessageType: message.chatMessageType,
+            );
+          } else {
+            return SizedBox.shrink(); // This should never be reached
+          }
+        }),
+      );
+    }
   }
 }
 
@@ -516,53 +570,69 @@ class ChatMessageWidget extends StatelessWidget {
   final String text;
   final ChatMessageType chatMessageType;
   const ChatMessageWidget(
-      {super.key, required this.text, required this.chatMessageType});
+      {Key? key, required this.text, required this.chatMessageType})
+      : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 10),
-      padding: const EdgeInsets.all(16),
-      color: chatMessageType == ChatMessageType.bot
-          ? botBackgroundColor
-          : backgroundColor,
       child: Row(
+        mainAxisAlignment: chatMessageType == ChatMessageType.bot
+            ? MainAxisAlignment.start
+            : MainAxisAlignment.end,
         children: [
           chatMessageType == ChatMessageType.bot
               ? Container(
-                  margin: const EdgeInsets.only(right: 16),
-                  child: CircleAvatar(
-                    backgroundColor: const Color.fromRGBO(16, 163, 127, 1),
-                    child: Image.asset('images/gpticon.jpg'),
+                  margin: const EdgeInsets.only(
+                      right: 8, left: 10), // Added left margin
+                  child: const CircleAvatar(
+                    child: Icon(Icons.bubble_chart_outlined),
                   ),
                 )
-              : Container(
-                  margin: const EdgeInsets.only(right: 16),
+              : Container(),
+          Flexible(
+            child: Padding(
+              padding: EdgeInsets.only(
+                right: chatMessageType == ChatMessageType.bot ? 20.0 : 10.0,
+                left: chatMessageType == ChatMessageType.user ? 20.0 : 10.0,
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: chatMessageType == ChatMessageType.bot
+                      ? Colors.grey[200]
+                      : Colors.grey[300],
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
+                    bottomLeft: chatMessageType == ChatMessageType.user
+                        ? Radius.circular(20)
+                        : Radius.circular(20),
+                    bottomRight: chatMessageType == ChatMessageType.bot
+                        ? Radius.circular(20)
+                        : Radius.circular(20),
+                  ),
+                ),
+                child: Text(
+                  text,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyText2
+                      ?.copyWith(color: Colors.black),
+                ),
+              ),
+            ),
+          ),
+          chatMessageType == ChatMessageType.user
+              ? Container(
+                  margin: const EdgeInsets.only(
+                      left: 8, right: 10), // Added right margin
                   child: const CircleAvatar(
                     child: Icon(Icons.person),
-                  )),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: const BoxDecoration(
-                    borderRadius: BorderRadius.all(
-                      Radius.circular(8),
-                    ),
-                  ),
-                  child: Text(
-                    text,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyLarge
-                        ?.copyWith(color: Colors.black),
                   ),
                 )
-              ],
-            ),
-          )
+              : Container(),
         ],
       ),
     );

@@ -10,4 +10,6 @@ class ChatMessage {
       {required this.text,
       required this.chatMessageType,
       required this.wasVoiceInput});
+
+  static fromMap(jsonDecode) {}
 }

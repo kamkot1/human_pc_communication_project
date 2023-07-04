@@ -10,7 +10,7 @@
             </intent>
         </queries>
     <application
-        android:label="chatbot"
+        android:label="Projekt komunikacja czlowiek-komputer"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

@@ -16,20 +16,24 @@ class AppLocalizations {
       'goodbye': 'Goodbye',
       'settings': 'Settings',
       'text': 'Text',
-      'your_app': 'Your app',
+      'your_app': 'Chatbot app',
       'change_language': 'Change language',
       'english': 'English',
       'polish': 'Polish',
       "restart_message": "Changes will apply after restarting the app.",
       "text_to_speech": "Text to speech",
       "speech_to_text": "Speech to text",
+      "welcomeMessage":
+          "Welcome to the app! You can start using it simply by asking the chatbot a question. If you'd like to talk to it, just press the microphone!",
+      "stop_listening": "Stop listening",
+      "input_placeholder": "Enter message here...",
     },
     'pl': {
       'hello': 'Cześć',
       'goodbye': 'Do widzenia',
       'settings': 'Ustawienia',
       'text': 'Tekst',
-      'your_app': 'Twoja aplikacja',
+      'your_app': 'Chatbot app',
       'change_language': 'Zmień język',
       'english': 'Angielski',
       'polish': 'Polski',
@@ -37,6 +41,10 @@ class AppLocalizations {
           "Zmiany zostaną wprowadzone po ponownym uruchomieniu aplikacji.",
       "text_to_speech": "Zamiana mowy na tekst",
       "speech_to_text": "Lektor czytający odpowiedzi",
+      "welcomeMessage":
+          "Witaj w aplikacji! Możesz zacząć jej używać zadając chatbotowi pytanie. Jeśli chcesz z nim porozmawiać, po prostu naciśnij mikrofon!",
+      "stop_listening": "Przestań używać mikrofonu",
+      "input_placeholder": "Napisz wiadomość...",
     },
   };
 
@@ -84,6 +92,18 @@ class AppLocalizations {
 
   String? get speech_to_text {
     return _localizedValues[locale.languageCode]?['speech_to_text'];
+  }
+
+  String? get welcomeMessage {
+    return _localizedValues[locale.languageCode]?['welcomeMessage'];
+  }
+
+  String? get stopListening {
+    return _localizedValues[locale.languageCode]?['stop_listening'];
+  }
+
+  String? get inputPlaceholder {
+    return _localizedValues[locale.languageCode]?['input_placeholder'];
   }
 }
 
