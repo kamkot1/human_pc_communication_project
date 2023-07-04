@@ -12,9 +12,11 @@ import 'dart:convert' as convert;
 import 'model.dart';
 import 'constant.dart';
 import 'settings_page.dart';
+import 'settings_service.dart';
 import 'dart:async';
 import 'package:async/async.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 
 class _AppLocalizationsDelegate
     extends LocalizationsDelegate<AppLocalizations> {
@@ -36,8 +38,15 @@ class _AppLocalizationsDelegate
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await initializeSpeechToText(); // Initialize speech recognition
-  runApp(MyApp());
+
+  final prefs = await SharedPreferences.getInstance();
+
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => SettingsService(prefs),
+      child: MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatefulWidget {
@@ -48,27 +57,12 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
-
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<SharedPreferences>(
-      future: _prefs,
-      builder:
-          (BuildContext context, AsyncSnapshot<SharedPreferences> snapshot) {
-        if (!snapshot.hasData) {
-          return CircularProgressIndicator(); // Or another loading indicator
-        }
-
-        SharedPreferences prefs = snapshot.data!;
-        String languageCode = prefs.getString('language') ?? 'en';
-        bool textToSpeechEnabled =
-            (prefs.getBool('textToSpeechEnabled') ?? false);
-        bool speechToTextEnabled =
-            (prefs.getBool('speechToTextEnabled') ?? false);
-
+    return Consumer<SettingsService>(
+      builder: (context, settingsService, child) {
         return MaterialApp(
-          locale: Locale(languageCode),
+          locale: Locale(settingsService.currentLanguageCode),
           localizationsDelegates: const [
             _AppLocalizationsDelegate(),
             GlobalMaterialLocalizations.delegate,
@@ -82,8 +76,8 @@ class _MyAppState extends State<MyApp> {
           debugShowCheckedModeBanner: false,
           theme: ThemeData(primarySwatch: Colors.green),
           home: ChatPage(
-            speechToTextEnabled: speechToTextEnabled,
-            textToSpeechEnabled: textToSpeechEnabled,
+            speechToTextEnabled: settingsService.speechToTextEnabled,
+            textToSpeechEnabled: settingsService.textToSpeechEnabled,
           ),
           routes: {
             '/settings': (context) => SettingsPage(),
@@ -106,7 +100,7 @@ class ChatPage extends StatefulWidget {
 
 int currentPage = 0;
 const backgroundColor = Color.fromARGB(96, 255, 255, 255);
-const botBackgroundColor = Color.fromARGB(85, 255, 255, 255);
+const botBackgroundColor = Color.fromARGB(84, 250, 250, 250);
 late bool isLoading;
 bool isEditing = false;
 // ignore: prefer_final_fields
@@ -167,6 +161,7 @@ class _ChatPageState extends State<ChatPage> {
     super.initState();
     isLoading = false;
     isListening.value = false;
+    initializeSpeechRecognition();
 
     void _handleFocusChange() {
       if (_focusNode.hasFocus) {
@@ -207,18 +202,27 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
+  String? lastLanguageUsed;
   Future<String> generateResponse(String prompt, bool wasVoiceInput) async {
     const apiKey = apiSecretKey;
     var url = Uri.https("api.openai.com", "/v1/chat/completions");
 
-    final messages = [
-      {
-        'role': 'system',
-        'content':
-            'You can start the conversation with a system message if needed.',
-      },
-      {'role': 'user', 'content': prompt},
-    ];
+    // Check if the language has changed
+    bool languageChanged =
+        lastLanguageUsed != null && lastLanguageUsed != currentLanguage;
+
+    // Include a system message with the current language if it has changed
+    final messages = languageChanged
+        ? [
+            {
+              'role': 'system',
+              'content': 'The current language is $currentLanguage.'
+            },
+            {'role': 'user', 'content': prompt}
+          ]
+        : [
+            {'role': 'user', 'content': prompt}
+          ];
 
     final response = await http.post(url,
         headers: {
@@ -235,16 +239,18 @@ class _ChatPageState extends State<ChatPage> {
           'presence_penalty': 0.0
         }));
 
-    //prompt od usera
-    //zdekoduj wiadomość
     if (response.statusCode == 200) {
       Map<String, dynamic> responseBody =
           convert.jsonDecode(convert.utf8.decode(response.bodyBytes));
       String newresponse = responseBody['choices'][0]['message']['content'];
-      //jeżeli był użyty mikrofon, wtedy przeczytaj
+
       if (wasVoiceInput && widget.textToSpeechEnabled!) {
         await flutterTts.speak(newresponse);
       }
+
+      // Update lastLanguageUsed to the current language
+      lastLanguageUsed = currentLanguage;
+
       return newresponse;
     } else {
       throw Exception('Failed to generate response: ${response.statusCode}');
@@ -483,7 +489,20 @@ class _ChatPageState extends State<ChatPage> {
             decoration: InputDecoration(
               hintText: AppLocalizations.of(context)?.inputPlaceholder ?? '',
               hintStyle: TextStyle(color: Color.fromARGB(136, 151, 151, 151)),
-              border: InputBorder.none,
+              filled: true,
+              fillColor: Color.fromARGB(207, 243, 243, 243),
+              enabledBorder: OutlineInputBorder(
+                borderSide: BorderSide.none,
+                borderRadius: BorderRadius.all(
+                  Radius.circular(20),
+                ), // adjust the radius as needed
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderSide: BorderSide.none,
+                borderRadius: BorderRadius.all(
+                  Radius.circular(20),
+                ), // adjust the radius as needed
+              ),
             ),
             focusNode: _focusNode,
             textCapitalization: TextCapitalization.sentences,
@@ -538,25 +557,6 @@ class _ChatPageState extends State<ChatPage> {
               text: message.text,
               chatMessageType: message.chatMessageType,
             );
-          } else if (isListening.value) {
-            return Container(
-              padding: EdgeInsets.all(16.0),
-              child: ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    stopListening();
-                  });
-                },
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.stop),
-                    SizedBox(width: 8.0),
-                    Text("Stop Listening"),
-                  ],
-                ),
-              ),
-            );
           } else {
             return SizedBox.shrink(); // This should never be reached
           }
@@ -570,7 +570,8 @@ class ChatMessageWidget extends StatelessWidget {
   final String text;
   final ChatMessageType chatMessageType;
   const ChatMessageWidget(
-      {super.key, required this.text, required this.chatMessageType});
+      {Key? key, required this.text, required this.chatMessageType})
+      : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -583,35 +584,50 @@ class ChatMessageWidget extends StatelessWidget {
         children: [
           chatMessageType == ChatMessageType.bot
               ? Container(
-                  margin: const EdgeInsets.only(right: 16),
+                  margin: const EdgeInsets.only(
+                      right: 8, left: 10), // Added left margin
                   child: const CircleAvatar(
-                    //backgroundColor: const Color.fromRGBO(16, 163, 127, 1),
-                    //child: Image.asset('images/ChatGPT_logo.svg'),
                     child: Icon(Icons.bubble_chart_outlined),
                   ),
                 )
               : Container(),
           Flexible(
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: chatMessageType == ChatMessageType.bot
-                    ? botBackgroundColor
-                    : backgroundColor,
-                borderRadius: BorderRadius.circular(20),
+            child: Padding(
+              padding: EdgeInsets.only(
+                right: chatMessageType == ChatMessageType.bot ? 20.0 : 10.0,
+                left: chatMessageType == ChatMessageType.user ? 20.0 : 10.0,
               ),
-              child: Text(
-                text,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyLarge
-                    ?.copyWith(color: Colors.black),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: chatMessageType == ChatMessageType.bot
+                      ? Colors.grey[200]
+                      : Colors.grey[300],
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
+                    bottomLeft: chatMessageType == ChatMessageType.user
+                        ? Radius.circular(20)
+                        : Radius.circular(20),
+                    bottomRight: chatMessageType == ChatMessageType.bot
+                        ? Radius.circular(20)
+                        : Radius.circular(20),
+                  ),
+                ),
+                child: Text(
+                  text,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyText2
+                      ?.copyWith(color: Colors.black),
+                ),
               ),
             ),
           ),
           chatMessageType == ChatMessageType.user
               ? Container(
-                  margin: const EdgeInsets.only(left: 16),
+                  margin: const EdgeInsets.only(
+                      left: 8, right: 10), // Added right margin
                   child: const CircleAvatar(
                     child: Icon(Icons.person),
                   ),
